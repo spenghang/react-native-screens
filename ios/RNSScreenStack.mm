@@ -22,6 +22,10 @@
 #import "RNSScreenStackHeaderConfig.h"
 #import "RNSScreenWindowTraits.h"
 
+#ifdef RCT_NEW_ARCH_ENABLED
+namespace react = facebook::react;
+#endif // RCT_NEW_ARCH_ENABLED
+
 @interface RNSScreenStackView () <
     UINavigationControllerDelegate,
     UIAdaptivePresentationControllerDelegate,
@@ -55,6 +59,24 @@
 - (UIViewController *)childViewControllerForStatusBarHidden
 {
   return [self topViewController];
+}
+
+- (void)viewDidLayoutSubviews
+{
+  [super viewDidLayoutSubviews];
+  if ([self.topViewController isKindOfClass:[RNSScreen class]]) {
+    RNSScreen *screenController = (RNSScreen *)self.topViewController;
+    BOOL isNotDismissingModal = screenController.presentedViewController == nil ||
+        (screenController.presentedViewController != nil &&
+         ![screenController.presentedViewController isBeingDismissed]);
+
+    // Calculate header height during simple transition from one screen to another.
+    // If RNSScreen includes a navigation controller of type RNSNavigationController, it should not calculate
+    // header height, as it could have nested stack.
+    if (![screenController hasNestedStack] && isNotDismissingModal) {
+      [screenController calculateAndNotifyHeaderHeightChangeIsModal:NO];
+    }
+  }
 }
 
 - (UIInterfaceOrientationMask)supportedInterfaceOrientations
@@ -112,7 +134,7 @@
 - (instancetype)initWithFrame:(CGRect)frame
 {
   if (self = [super initWithFrame:frame]) {
-    static const auto defaultProps = std::make_shared<const facebook::react::RNSScreenStackProps>();
+    static const auto defaultProps = std::make_shared<const react::RNSScreenStackProps>();
     _props = defaultProps;
     [self initCommonProps];
   }
@@ -169,8 +191,8 @@
 {
 #ifdef RCT_NEW_ARCH_ENABLED
   if (_eventEmitter != nullptr) {
-    std::dynamic_pointer_cast<const facebook::react::RNSScreenStackEventEmitter>(_eventEmitter)
-        ->onFinishTransitioning(facebook::react::RNSScreenStackEventEmitter::OnFinishTransitioning{});
+    std::dynamic_pointer_cast<const react::RNSScreenStackEventEmitter>(_eventEmitter)
+        ->onFinishTransitioning(react::RNSScreenStackEventEmitter::OnFinishTransitioning{});
   }
 #else
   if (self.onFinishTransitioning) {
@@ -1013,12 +1035,11 @@
   _snapshot = [_controller.visibleViewController.view snapshotViewAfterScreenUpdates:NO];
 }
 
-- (void)mountingTransactionWillMount:(facebook::react::MountingTransaction const &)transaction
-                withSurfaceTelemetry:(facebook::react::SurfaceTelemetry const &)surfaceTelemetry
+- (void)mountingTransactionWillMount:(react::MountingTransaction const &)transaction
+                withSurfaceTelemetry:(react::SurfaceTelemetry const &)surfaceTelemetry
 {
   for (auto &mutation : transaction.getMutations()) {
-    if (mutation.type == facebook::react::ShadowViewMutation::Type::Remove &&
-        mutation.parentShadowView.componentName != nil &&
+    if (mutation.type == react::ShadowViewMutation::Type::Remove && mutation.parentShadowView.componentName != nil &&
         strcmp(mutation.parentShadowView.componentName, "RNSScreenStack") == 0) {
       [self takeSnapshot];
       return;
@@ -1042,9 +1063,9 @@
   [_controller setViewControllers:@[ [UIViewController new] ]];
 }
 
-+ (facebook::react::ComponentDescriptorProvider)componentDescriptorProvider
++ (react::ComponentDescriptorProvider)componentDescriptorProvider
 {
-  return facebook::react::concreteComponentDescriptorProvider<facebook::react::RNSScreenStackComponentDescriptor>();
+  return react::concreteComponentDescriptorProvider<react::RNSScreenStackComponentDescriptor>();
 }
 #else
 #pragma mark - Paper specific
